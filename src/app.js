@@ -1,7 +1,8 @@
 import { getSession, onAuthStateChange, signIn, signOut } from './auth.js';
 import { sync, pendingCount, onSyncStatusChange } from './sync.js';
 import { SECOES } from './schema.js';
-import { renderNav, renderForm, renderLista, collectFormData } from './render.js';
+import { renderForm, renderLista, collectFormData } from './render.js';
+import { renderRegistrarVisita } from './visitaForm.js';
 import * as clientesRepo from './db/clientes.js';
 import * as visitasRepo from './db/visitas.js';
 import * as lembretesRepo from './db/lembretes.js';
@@ -36,6 +37,8 @@ const FILTROS_STATUS_CLIENTE = [
   { valor: 'manutencao', rotulo: 'Manutenção' },
 ];
 
+const ROTA_REGISTRAR_VISITA = 'registrar-visita';
+
 const app = document.querySelector('#app');
 let currentStatus = 'ocioso';
 let editandoId = null;
@@ -46,16 +49,19 @@ onSyncStatusChange((status) => {
   renderStatusBar();
 });
 
-function secaoAtiva() {
+function rotaAtiva() {
   const id = location.hash.replace('#', '');
-  return SECOES.find((s) => s.id === id) ?? SECOES[0];
+  if (id === '') return ROTA_REGISTRAR_VISITA;
+  if (id === ROTA_REGISTRAR_VISITA) return id;
+  return SECOES.find((s) => s.id === id)?.id ?? ROTA_REGISTRAR_VISITA;
 }
 
 async function boot() {
   editandoId = null;
   const session = await getSession();
   if (session) {
-    await renderApp();
+    renderShell();
+    await renderConteudo();
     sync();
   } else {
     renderLogin();
@@ -86,6 +92,45 @@ function renderLogin() {
   });
 }
 
+function renderShell() {
+  const rota = rotaAtiva();
+  const linkRegistrar = `<a href="#${ROTA_REGISTRAR_VISITA}" class="nav-link${rota === ROTA_REGISTRAR_VISITA ? ' ativo' : ''}">Registrar visita</a>`;
+  const linksSecoes = SECOES.map(
+    (s) => `<a href="#${s.id}" class="nav-link${s.id === rota ? ' ativo' : ''}">${s.titulo}</a>`
+  ).join(' ');
+
+  app.innerHTML = `
+    <div id="status-bar"></div>
+    <h1>Gestão Agro</h1>
+    <div class="barra-acoes">
+      <button id="btn-sync">Sincronizar agora</button>
+      <button id="btn-logout">Sair</button>
+    </div>
+    <nav>${linkRegistrar} ${linksSecoes}</nav>
+    <div id="conteudo"></div>
+  `;
+
+  document.querySelector('#btn-sync').addEventListener('click', () => sync());
+  document.querySelector('#btn-logout').addEventListener('click', () => signOut());
+  renderStatusBar();
+}
+
+async function renderConteudo() {
+  const rota = rotaAtiva();
+  const conteudo = document.querySelector('#conteudo');
+
+  if (rota === ROTA_REGISTRAR_VISITA) {
+    await renderRegistrarVisita(conteudo, {
+      aoSalvar: () => {
+        sync();
+        renderStatusBar();
+      },
+    });
+  } else {
+    await renderSecaoGenerica(conteudo, rota);
+  }
+}
+
 function renderFiltroClientes(secao) {
   if (secao.id !== 'clientes') return '';
   const botoes = FILTROS_STATUS_CLIENTE.map(
@@ -95,8 +140,8 @@ function renderFiltroClientes(secao) {
   return `<div class="filtro-status">${botoes}</div>`;
 }
 
-async function renderApp() {
-  const secao = secaoAtiva();
+async function renderSecaoGenerica(conteudo, secaoId) {
+  const secao = SECOES.find((s) => s.id === secaoId);
   const repo = REPOS[secao.id];
 
   const [registros, clientes] = await Promise.all([repo.list(), clientesRepo.listClientes()]);
@@ -112,27 +157,15 @@ async function renderApp() {
   const precisaCliente = secao.campos.some((c) => c.tipo === 'select-cliente');
   const semClientes = precisaCliente && clientes.length === 0;
 
-  app.innerHTML = `
-    <div id="status-bar"></div>
-    <h1>Gestão Agro</h1>
-    <div class="barra-acoes">
-      <button id="btn-sync">Sincronizar agora</button>
-      <button id="btn-logout">Sair</button>
-    </div>
-    ${renderNav(SECOES, secao.id)}
+  conteudo.innerHTML = `
     <h2>${secao.titulo}</h2>
     ${semClientes ? '<p>Cadastre um cliente antes de criar um registro aqui.</p>' : renderForm(secao, { clientes }, registroEditando)}
     ${renderFiltroClientes(secao)}
     ${renderLista(secao, registrosExibidos, { clientesById })}
   `;
 
-  renderStatusBar();
-
-  document.querySelector('#btn-sync').addEventListener('click', () => sync());
-  document.querySelector('#btn-logout').addEventListener('click', () => signOut());
-
   if (!semClientes) {
-    document.querySelector(`#form-${secao.id}`).addEventListener('submit', async (e) => {
+    conteudo.querySelector(`#form-${secao.id}`).addEventListener('submit', async (e) => {
       e.preventDefault();
       const dados = collectFormData(secao, e.target);
       if (editandoId) {
@@ -142,35 +175,37 @@ async function renderApp() {
       }
       editandoId = null;
       sync();
-      renderApp();
+      renderStatusBar();
+      renderSecaoGenerica(conteudo, secaoId);
     });
 
-    document.querySelector('#btn-cancelar-edicao')?.addEventListener('click', () => {
+    conteudo.querySelector('#btn-cancelar-edicao')?.addEventListener('click', () => {
       editandoId = null;
-      renderApp();
+      renderSecaoGenerica(conteudo, secaoId);
     });
   }
 
-  app.querySelectorAll('[data-filtro-status]').forEach((btn) => {
+  conteudo.querySelectorAll('[data-filtro-status]').forEach((btn) => {
     btn.addEventListener('click', () => {
       filtroStatusCliente = btn.dataset.filtroStatus;
-      renderApp();
+      renderSecaoGenerica(conteudo, secaoId);
     });
   });
 
-  app.querySelectorAll('[data-editar]').forEach((btn) => {
+  conteudo.querySelectorAll('[data-editar]').forEach((btn) => {
     btn.addEventListener('click', () => {
       editandoId = btn.dataset.editar;
-      renderApp();
+      renderSecaoGenerica(conteudo, secaoId);
     });
   });
 
-  app.querySelectorAll('[data-excluir]').forEach((btn) => {
+  conteudo.querySelectorAll('[data-excluir]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       await repo.remove(btn.dataset.excluir);
       if (editandoId === btn.dataset.excluir) editandoId = null;
       sync();
-      renderApp();
+      renderStatusBar();
+      renderSecaoGenerica(conteudo, secaoId);
     });
   });
 }
