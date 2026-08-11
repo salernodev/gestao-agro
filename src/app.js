@@ -3,6 +3,7 @@ import { sync, pendingCount, onSyncStatusChange } from './sync.js';
 import { SECOES } from './schema.js';
 import { renderForm, renderLista, collectFormData } from './render.js';
 import { renderRegistrarVisita } from './visitaForm.js';
+import { renderRelatorio } from './relatorio.js';
 import { iniciarConexaoGoogle, googleConectado, marcarGoogleConectado } from './googleCalendar.js';
 import * as clientesRepo from './db/clientes.js';
 import * as visitasRepo from './db/visitas.js';
@@ -39,6 +40,7 @@ const FILTROS_STATUS_CLIENTE = [
 ];
 
 const ROTA_REGISTRAR_VISITA = 'registrar-visita';
+const ROTA_RELATORIO = 'relatorio';
 
 const app = document.querySelector('#app');
 let currentStatus = 'ocioso';
@@ -62,7 +64,7 @@ function hashInfo() {
 function rotaAtiva() {
   const { rota } = hashInfo();
   if (rota === '') return ROTA_REGISTRAR_VISITA;
-  if (rota === ROTA_REGISTRAR_VISITA) return rota;
+  if (rota === ROTA_REGISTRAR_VISITA || rota === ROTA_RELATORIO) return rota;
   return SECOES.find((s) => s.id === rota)?.id ?? ROTA_REGISTRAR_VISITA;
 }
 
@@ -126,6 +128,7 @@ function renderShell() {
   const linksSecoes = SECOES.map(
     (s) => `<a href="#${s.id}" class="nav-link${s.id === rota ? ' ativo' : ''}">${s.titulo}</a>`
   ).join(' ');
+  const linkRelatorio = `<a href="#${ROTA_RELATORIO}" class="nav-link${rota === ROTA_RELATORIO ? ' ativo' : ''}">Relatório</a>`;
 
   app.innerHTML = `
     <div id="status-bar"></div>
@@ -134,7 +137,7 @@ function renderShell() {
       <button id="btn-sync">Sincronizar agora</button>
       <button id="btn-logout">Sair</button>
     </div>
-    <nav>${linkRegistrar} ${linksSecoes}</nav>
+    <nav>${linkRegistrar} ${linksSecoes} ${linkRelatorio}</nav>
     <div id="conteudo"></div>
   `;
 
@@ -154,6 +157,8 @@ async function renderConteudo() {
         renderStatusBar();
       },
     });
+  } else if (rota === ROTA_RELATORIO) {
+    await renderRelatorio(conteudo);
   } else {
     await renderSecaoGenerica(conteudo, rota);
   }

@@ -52,3 +52,33 @@ nav {
   color: #555;
   margin-bottom: 0.5rem;
 }
+
+#rel-controles {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.relatorio-resumo {
+  background: #f2f2f2;
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  margin: 1rem 0;
+}
+
+.relatorio-cliente {
+  margin-bottom: 1.25rem;
+}
+
+.relatorio-cliente h3 {
+  margin-bottom: 0.25rem;
+}
+
+@media print {
+  nav,
+  .barra-acoes,
+  #status-bar,
+  #rel-controles {
+    display: none;
+  }
+}

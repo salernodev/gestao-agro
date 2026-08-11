@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gestao-agro-v1';
+const CACHE_NAME = 'gestao-agro-v2';
 
 const APP_SHELL = [
   './',
@@ -11,6 +11,7 @@ const APP_SHELL = [
   './src/config.js',
   './src/googleCalendar.js',
   './src/render.js',
+  './src/relatorio.js',
   './src/schema.js',
   './src/supabaseClient.js',
   './src/sync.js',
