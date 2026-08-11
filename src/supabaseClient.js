@@ -8,7 +8,7 @@ let clientPromise = null;
 // normalmente, só o sync fica indisponível até haver rede.
 export function getSupabase() {
   if (!clientPromise) {
-    clientPromise = import('https://esm.sh/@supabase/supabase-js@2').then(({ createClient }) =>
+    clientPromise = import('https://esm.sh/@supabase/supabase-js@2?bundle').then(({ createClient }) =>
       createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
     );
   }
