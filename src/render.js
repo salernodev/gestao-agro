@@ -46,6 +46,9 @@ function renderCampo(secao, campo, contexto, registroEditando) {
   } else if (campo.tipo === 'date') {
     const valor = valorAtual ?? (campo.padrao === 'hoje' ? new Date().toISOString().slice(0, 10) : '');
     input = `<input type="date" id="${inputId}" name="${campo.id}" value="${valor}" ${obrig} />`;
+  } else if (campo.tipo === 'time') {
+    const valor = valorAtual ?? (campo.padrao === 'agora' ? horaAtual() : '');
+    input = `<input type="time" id="${inputId}" name="${campo.id}" value="${valor}" ${obrig} />`;
   } else if (campo.tipo === 'datetime') {
     const valor = valorAtual ? isoParaDatetimeLocal(valorAtual) : '';
     input = `<input type="datetime-local" id="${inputId}" name="${campo.id}" value="${valor}" ${obrig} />`;
@@ -54,6 +57,12 @@ function renderCampo(secao, campo, contexto, registroEditando) {
   }
 
   return `<div class="campo"><label for="${inputId}">${campo.label}</label>${input}</div>`;
+}
+
+function horaAtual() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function isoParaDatetimeLocal(iso) {

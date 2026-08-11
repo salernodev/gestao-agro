@@ -14,6 +14,16 @@ export function getLembrete(id) {
   return getById(STORE, id);
 }
 
+// Usado para avisar (não bloquear) quando já existe outro lembrete no
+// mesmo dia/horário — dois lembretes coincidirem não é necessariamente um
+// erro (não são compromissos com hora marcada tipo reunião), então a
+// decisão de manter os dois fica com quem está usando.
+export function buscarConflito(dataHora, ignorarId = null) {
+  return listLembretes().then(
+    (lembretes) => lembretes.find((l) => l.data_hora === dataHora && l.id !== ignorarId) ?? null
+  );
+}
+
 export function createLembrete(data) {
   const now = new Date().toISOString();
   const lembrete = {

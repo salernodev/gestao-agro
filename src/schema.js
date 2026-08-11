@@ -28,6 +28,7 @@ export const SECOES = [
     campos: [
       { id: 'cliente_id', label: 'Cliente', tipo: 'select-cliente', obrigatorio: true },
       { id: 'data', label: 'Data', tipo: 'date', obrigatorio: true, padrao: 'hoje' },
+      { id: 'hora', label: 'Hora', tipo: 'time', padrao: 'agora' },
       {
         id: 'tipo',
         label: 'Tipo',

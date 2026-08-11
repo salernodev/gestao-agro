@@ -8,9 +8,16 @@ const TIPOS = [
   { valor: 'manutencao', rotulo: 'Manutenção' },
 ];
 
+function horaAtual() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export async function renderRegistrarVisita(container, { aoSalvar, flash } = {}) {
   const clientes = await clientesRepo.listClientes();
   const hoje = new Date().toISOString().slice(0, 10);
+  const agora = horaAtual();
 
   container.innerHTML = `
     ${flash ? `<p style="color:green;">${flash}</p>` : ''}
@@ -35,6 +42,11 @@ export async function renderRegistrarVisita(container, { aoSalvar, flash } = {})
       <div class="campo">
         <label for="rv-data">Data</label>
         <input type="date" id="rv-data" value="${hoje}" required />
+      </div>
+
+      <div class="campo">
+        <label for="rv-hora">Hora</label>
+        <input type="time" id="rv-hora" value="${agora}" />
       </div>
 
       <div class="campo">
@@ -98,10 +110,11 @@ export async function renderRegistrarVisita(container, { aoSalvar, flash } = {})
       }
 
       const data = container.querySelector('#rv-data').value;
+      const hora = container.querySelector('#rv-hora').value;
       const tipo = container.querySelector('#rv-tipo').value;
       const resumo = container.querySelector('#rv-resumo').value;
 
-      const visita = await visitasRepo.createVisita({ cliente_id: clienteId, data, tipo, resumo });
+      const visita = await visitasRepo.createVisita({ cliente_id: clienteId, data, hora, tipo, resumo });
 
       if (proximaCheckbox.checked) {
         const proximaValor = container.querySelector('#rv-proxima-data').value;
@@ -109,12 +122,21 @@ export async function renderRegistrarVisita(container, { aoSalvar, flash } = {})
           mensagem.textContent = 'Informe a data/hora da próxima visita, ou desmarque a opção.';
           return;
         }
-        await lembretesRepo.createLembrete({
-          cliente_id: clienteId,
-          visita_id: visita.id,
-          data_hora: new Date(proximaValor).toISOString(),
-          texto: 'Retornar — visita combinada',
-        });
+
+        const dataHoraISO = new Date(proximaValor).toISOString();
+        const conflito = await lembretesRepo.buscarConflito(dataHoraISO);
+        const prosseguirComLembrete =
+          !conflito ||
+          confirm(`Já existe um lembrete marcado para esse dia e horário ("${conflito.texto}"). Deseja salvar mesmo assim?`);
+
+        if (prosseguirComLembrete) {
+          await lembretesRepo.createLembrete({
+            cliente_id: clienteId,
+            visita_id: visita.id,
+            data_hora: dataHoraISO,
+            texto: 'Retornar — visita combinada',
+          });
+        }
       }
 
       aoSalvar?.();

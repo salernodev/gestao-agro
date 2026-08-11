@@ -20,6 +20,7 @@ export function createVisita(data) {
     id: crypto.randomUUID(),
     cliente_id: data.cliente_id,
     data: data.data,
+    hora: data.hora || null,
     tipo: data.tipo,
     resumo: data.resumo ?? '',
     observacoes: data.observacoes ?? '',

@@ -225,6 +225,17 @@ async function renderSecaoGenerica(conteudo, secaoId) {
     conteudo.querySelector(`#form-${secao.id}`).addEventListener('submit', async (e) => {
       e.preventDefault();
       const dados = collectFormData(secao, e.target);
+
+      if (secao.id === 'lembretes') {
+        const conflito = await lembretesRepo.buscarConflito(dados.data_hora, editandoId);
+        if (conflito) {
+          const prosseguir = confirm(
+            `Já existe um lembrete marcado para esse dia e horário ("${conflito.texto}"). Deseja salvar mesmo assim?`
+          );
+          if (!prosseguir) return;
+        }
+      }
+
       if (editandoId) {
         await repo.update(editandoId, dados);
       } else {
