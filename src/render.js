@@ -9,42 +9,57 @@ export function renderNav(secoes, ativaId) {
   return `<nav>${links}</nav>`;
 }
 
-export function renderForm(secao, contexto = {}) {
-  const campos = secao.campos.map((campo) => renderCampo(secao, campo, contexto)).join('');
+export function renderForm(secao, contexto = {}, registroEditando = null) {
+  const campos = secao.campos
+    .map((campo) => renderCampo(secao, campo, contexto, registroEditando))
+    .join('');
+
   return `
     <form id="form-${secao.id}" data-secao="${secao.id}">
       ${campos}
-      <button type="submit">Salvar</button>
+      <button type="submit">${registroEditando ? 'Salvar alterações' : 'Salvar'}</button>
+      ${registroEditando ? '<button type="button" id="btn-cancelar-edicao">Cancelar</button>' : ''}
     </form>
   `;
 }
 
-function renderCampo(secao, campo, contexto) {
+function renderCampo(secao, campo, contexto, registroEditando) {
   const inputId = `campo-${secao.id}-${campo.id}`;
   const obrig = campo.obrigatorio ? 'required' : '';
+  const valorAtual = registroEditando ? registroEditando[campo.id] : undefined;
   let input;
 
   if (campo.tipo === 'textarea') {
-    input = `<textarea id="${inputId}" name="${campo.id}" ${obrig}></textarea>`;
+    input = `<textarea id="${inputId}" name="${campo.id}" ${obrig}>${valorAtual ?? ''}</textarea>`;
   } else if (campo.tipo === 'select') {
+    const selecionado = valorAtual ?? campo.padrao;
     const opcoes = campo.opcoes
-      .map((o) => `<option value="${o.valor}" ${o.valor === campo.padrao ? 'selected' : ''}>${o.rotulo}</option>`)
+      .map((o) => `<option value="${o.valor}" ${o.valor === selecionado ? 'selected' : ''}>${o.rotulo}</option>`)
       .join('');
     input = `<select id="${inputId}" name="${campo.id}" ${obrig}>${opcoes}</select>`;
   } else if (campo.tipo === 'select-cliente') {
     const clientes = contexto.clientes ?? [];
-    const opcoes = clientes.map((c) => `<option value="${c.id}">${c.nome}</option>`).join('');
+    const opcoes = clientes
+      .map((c) => `<option value="${c.id}" ${c.id === valorAtual ? 'selected' : ''}>${c.nome}</option>`)
+      .join('');
     input = `<select id="${inputId}" name="${campo.id}" ${obrig}>${opcoes}</select>`;
   } else if (campo.tipo === 'date') {
-    const valorPadrao = campo.padrao === 'hoje' ? new Date().toISOString().slice(0, 10) : '';
-    input = `<input type="date" id="${inputId}" name="${campo.id}" value="${valorPadrao}" ${obrig} />`;
+    const valor = valorAtual ?? (campo.padrao === 'hoje' ? new Date().toISOString().slice(0, 10) : '');
+    input = `<input type="date" id="${inputId}" name="${campo.id}" value="${valor}" ${obrig} />`;
   } else if (campo.tipo === 'datetime') {
-    input = `<input type="datetime-local" id="${inputId}" name="${campo.id}" ${obrig} />`;
+    const valor = valorAtual ? isoParaDatetimeLocal(valorAtual) : '';
+    input = `<input type="datetime-local" id="${inputId}" name="${campo.id}" value="${valor}" ${obrig} />`;
   } else {
-    input = `<input type="text" id="${inputId}" name="${campo.id}" ${obrig} />`;
+    input = `<input type="text" id="${inputId}" name="${campo.id}" value="${valorAtual ?? ''}" ${obrig} />`;
   }
 
   return `<div class="campo"><label for="${inputId}">${campo.label}</label>${input}</div>`;
+}
+
+function isoParaDatetimeLocal(iso) {
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export function collectFormData(secao, formEl) {
@@ -66,7 +81,7 @@ export function renderLista(secao, registros, contexto = {}) {
         .map((campo) => formatarValor(campo, registro[campo.id], contexto))
         .filter(Boolean)
         .join(' — ');
-      return `<li>${resumo} <button data-excluir="${registro.id}">excluir</button></li>`;
+      return `<li>${resumo} <button data-editar="${registro.id}">editar</button> <button data-excluir="${registro.id}">excluir</button></li>`;
     })
     .join('');
 

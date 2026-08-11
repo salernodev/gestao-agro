@@ -9,13 +9,37 @@ import * as lembretesRepo from './db/lembretes.js';
 // Único ponto do app que sabe que "clientes/visitas/lembretes" existem de
 // verdade — render.js e schema.js não conhecem essas entidades por nome.
 const REPOS = {
-  clientes: { list: clientesRepo.listClientes, create: clientesRepo.createCliente, remove: clientesRepo.deleteCliente },
-  visitas: { list: visitasRepo.listVisitas, create: visitasRepo.createVisita, remove: visitasRepo.deleteVisita },
-  lembretes: { list: lembretesRepo.listLembretes, create: lembretesRepo.createLembrete, remove: lembretesRepo.deleteLembrete },
+  clientes: {
+    list: clientesRepo.listClientes,
+    create: clientesRepo.createCliente,
+    update: clientesRepo.updateCliente,
+    remove: clientesRepo.deleteCliente,
+  },
+  visitas: {
+    list: visitasRepo.listVisitas,
+    create: visitasRepo.createVisita,
+    update: visitasRepo.updateVisita,
+    remove: visitasRepo.deleteVisita,
+  },
+  lembretes: {
+    list: lembretesRepo.listLembretes,
+    create: lembretesRepo.createLembrete,
+    update: lembretesRepo.updateLembrete,
+    remove: lembretesRepo.deleteLembrete,
+  },
 };
+
+const FILTROS_STATUS_CLIENTE = [
+  { valor: 'todos', rotulo: 'Todos' },
+  { valor: 'prospeccao', rotulo: 'Prospecção' },
+  { valor: 'ativo', rotulo: 'Ativo' },
+  { valor: 'manutencao', rotulo: 'Manutenção' },
+];
 
 const app = document.querySelector('#app');
 let currentStatus = 'ocioso';
+let editandoId = null;
+let filtroStatusCliente = 'todos';
 
 onSyncStatusChange((status) => {
   currentStatus = status;
@@ -28,6 +52,7 @@ function secaoAtiva() {
 }
 
 async function boot() {
+  editandoId = null;
   const session = await getSession();
   if (session) {
     await renderApp();
@@ -61,12 +86,28 @@ function renderLogin() {
   });
 }
 
+function renderFiltroClientes(secao) {
+  if (secao.id !== 'clientes') return '';
+  const botoes = FILTROS_STATUS_CLIENTE.map(
+    (f) =>
+      `<button data-filtro-status="${f.valor}" ${f.valor === filtroStatusCliente ? 'disabled' : ''}>${f.rotulo}</button>`
+  ).join(' ');
+  return `<div class="filtro-status">${botoes}</div>`;
+}
+
 async function renderApp() {
   const secao = secaoAtiva();
   const repo = REPOS[secao.id];
 
   const [registros, clientes] = await Promise.all([repo.list(), clientesRepo.listClientes()]);
   const clientesById = new Map(clientes.map((c) => [c.id, c]));
+
+  const registrosExibidos =
+    secao.id === 'clientes' && filtroStatusCliente !== 'todos'
+      ? registros.filter((r) => r.status === filtroStatusCliente)
+      : registros;
+
+  const registroEditando = editandoId ? registros.find((r) => r.id === editandoId) ?? null : null;
 
   const precisaCliente = secao.campos.some((c) => c.tipo === 'select-cliente');
   const semClientes = precisaCliente && clientes.length === 0;
@@ -80,8 +121,9 @@ async function renderApp() {
     </div>
     ${renderNav(SECOES, secao.id)}
     <h2>${secao.titulo}</h2>
-    ${semClientes ? '<p>Cadastre um cliente antes de criar um registro aqui.</p>' : renderForm(secao, { clientes })}
-    ${renderLista(secao, registros, { clientesById })}
+    ${semClientes ? '<p>Cadastre um cliente antes de criar um registro aqui.</p>' : renderForm(secao, { clientes }, registroEditando)}
+    ${renderFiltroClientes(secao)}
+    ${renderLista(secao, registrosExibidos, { clientesById })}
   `;
 
   renderStatusBar();
@@ -93,15 +135,40 @@ async function renderApp() {
     document.querySelector(`#form-${secao.id}`).addEventListener('submit', async (e) => {
       e.preventDefault();
       const dados = collectFormData(secao, e.target);
-      await repo.create(dados);
+      if (editandoId) {
+        await repo.update(editandoId, dados);
+      } else {
+        await repo.create(dados);
+      }
+      editandoId = null;
       sync();
+      renderApp();
+    });
+
+    document.querySelector('#btn-cancelar-edicao')?.addEventListener('click', () => {
+      editandoId = null;
       renderApp();
     });
   }
 
+  app.querySelectorAll('[data-filtro-status]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      filtroStatusCliente = btn.dataset.filtroStatus;
+      renderApp();
+    });
+  });
+
+  app.querySelectorAll('[data-editar]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      editandoId = btn.dataset.editar;
+      renderApp();
+    });
+  });
+
   app.querySelectorAll('[data-excluir]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       await repo.remove(btn.dataset.excluir);
+      if (editandoId === btn.dataset.excluir) editandoId = null;
       sync();
       renderApp();
     });

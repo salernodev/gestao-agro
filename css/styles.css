@@ -26,6 +26,18 @@ nav {
   margin-bottom: 0.5rem;
 }
 
+.filtro-status {
+  margin: 0.5rem 0;
+}
+
+.filtro-status button {
+  margin-right: 0.3rem;
+}
+
+.filtro-status button:disabled {
+  font-weight: bold;
+}
+
 .campo {
   margin-bottom: 0.5rem;
 }
