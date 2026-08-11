@@ -3,6 +3,7 @@ import { sync, pendingCount, onSyncStatusChange } from './sync.js';
 import { SECOES } from './schema.js';
 import { renderForm, renderLista, collectFormData } from './render.js';
 import { renderRegistrarVisita } from './visitaForm.js';
+import { iniciarConexaoGoogle, googleConectado, marcarGoogleConectado } from './googleCalendar.js';
 import * as clientesRepo from './db/clientes.js';
 import * as visitasRepo from './db/visitas.js';
 import * as lembretesRepo from './db/lembretes.js';
@@ -43,21 +44,48 @@ const app = document.querySelector('#app');
 let currentStatus = 'ocioso';
 let editandoId = null;
 let filtroStatusCliente = 'todos';
+let googleFlash = null;
 
 onSyncStatusChange((status) => {
   currentStatus = status;
   renderStatusBar();
 });
 
+// O redirect de volta do Google vem como "#lembretes?google=conectado" —
+// separamos a rota (antes do "?") dos parâmetros (depois dele).
+function hashInfo() {
+  const semHash = location.hash.replace('#', '');
+  const [rota, queryString] = semHash.split('?');
+  return { rota: rota || '', params: new URLSearchParams(queryString ?? '') };
+}
+
 function rotaAtiva() {
-  const id = location.hash.replace('#', '');
-  if (id === '') return ROTA_REGISTRAR_VISITA;
-  if (id === ROTA_REGISTRAR_VISITA) return id;
-  return SECOES.find((s) => s.id === id)?.id ?? ROTA_REGISTRAR_VISITA;
+  const { rota } = hashInfo();
+  if (rota === '') return ROTA_REGISTRAR_VISITA;
+  if (rota === ROTA_REGISTRAR_VISITA) return rota;
+  return SECOES.find((s) => s.id === rota)?.id ?? ROTA_REGISTRAR_VISITA;
+}
+
+// Consome o "?google=..." da URL uma única vez: marca o status localmente,
+// guarda uma mensagem para exibir, e limpa a URL para não repetir num refresh.
+function consumirRetornoGoogle() {
+  const { rota, params } = hashInfo();
+  const resultado = params.get('google');
+  if (!resultado) return;
+
+  if (resultado === 'conectado') {
+    marcarGoogleConectado();
+    googleFlash = { tipo: 'ok', texto: 'Google Agenda conectada com sucesso.' };
+  } else {
+    googleFlash = { tipo: 'erro', texto: 'Não foi possível conectar ao Google Agenda. Tente novamente.' };
+  }
+
+  history.replaceState(null, '', `#${rota}`);
 }
 
 async function boot() {
   editandoId = null;
+  consumirRetornoGoogle();
   const session = await getSession();
   if (session) {
     renderShell();
@@ -140,6 +168,23 @@ function renderFiltroClientes(secao) {
   return `<div class="filtro-status">${botoes}</div>`;
 }
 
+function renderConexaoGoogle(secao) {
+  if (secao.id !== 'lembretes') return '';
+
+  const flash = googleFlash
+    ? `<p style="color:${googleFlash.tipo === 'ok' ? 'green' : 'red'};">${googleFlash.texto}</p>`
+    : '';
+
+  const status = googleConectado()
+    ? '<p>Google Agenda conectada. Os lembretes são espelhados automaticamente ao sincronizar.</p>'
+    : `
+      <p>Conecte o Google Agenda do Marcos para os lembretes aparecerem lá também.</p>
+      <button id="btn-conectar-google">Conectar Google Agenda</button>
+    `;
+
+  return `<div class="conexao-google">${flash}${status}</div>`;
+}
+
 async function renderSecaoGenerica(conteudo, secaoId) {
   const secao = SECOES.find((s) => s.id === secaoId);
   const repo = REPOS[secao.id];
@@ -159,10 +204,22 @@ async function renderSecaoGenerica(conteudo, secaoId) {
 
   conteudo.innerHTML = `
     <h2>${secao.titulo}</h2>
+    ${renderConexaoGoogle(secao)}
     ${semClientes ? '<p>Cadastre um cliente antes de criar um registro aqui.</p>' : renderForm(secao, { clientes }, registroEditando)}
     ${renderFiltroClientes(secao)}
     ${renderLista(secao, registrosExibidos, { clientesById })}
   `;
+  googleFlash = null;
+
+  conteudo.querySelector('#btn-conectar-google')?.addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    try {
+      await iniciarConexaoGoogle();
+    } catch (err) {
+      e.target.disabled = false;
+      alert('Não foi possível iniciar a conexão: ' + err.message);
+    }
+  });
 
   if (!semClientes) {
     conteudo.querySelector(`#form-${secao.id}`).addEventListener('submit', async (e) => {

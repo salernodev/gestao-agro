@@ -1,5 +1,6 @@
 import { getSupabase } from './supabaseClient.js';
-import { getOutboxEntries, deleteOutboxEntry, getAll, put } from './db/db.js';
+import { getOutboxEntries, deleteOutboxEntry, getAll, put, getById } from './db/db.js';
+import { updateLembrete } from './db/lembretes.js';
 
 const ENTIDADES = ['clientes', 'visitas', 'lembretes'];
 
@@ -28,6 +29,40 @@ async function pushOutbox(supabase) {
     const { error } = await supabase.from(entry.entity).upsert(entry.payload, { onConflict: 'id' });
     if (error) throw error;
     await deleteOutboxEntry(entry.seq);
+
+    if (entry.entity === 'lembretes') {
+      await mirrorLembrete(supabase, entry.payload);
+    }
+  }
+}
+
+// Espelha um lembrete no Google Agenda. Best-effort: se o Marcos ainda não
+// conectou a Agenda (ou a chamada falha por qualquer motivo), só registra
+// no console e segue — isso nunca deve travar o sync dos dados em si.
+async function mirrorLembrete(supabase, payload) {
+  try {
+    const cliente = payload.cliente_id ? await getById('clientes', payload.cliente_id) : null;
+
+    const { data, error } = await supabase.functions.invoke('google-calendar-mirror', {
+      body: {
+        cliente_nome: cliente?.nome ?? null,
+        data_hora: payload.data_hora,
+        texto: payload.texto,
+        google_event_id: payload.google_event_id,
+        deleted: payload.deleted,
+      },
+    });
+
+    if (error) {
+      console.warn('Espelhamento no Google Agenda não realizado (provavelmente ainda não conectado):', error);
+      return;
+    }
+
+    if (data?.google_event_id !== payload.google_event_id) {
+      await updateLembrete(payload.id, { google_event_id: data.google_event_id });
+    }
+  } catch (err) {
+    console.warn('Erro ao espelhar lembrete no Google Agenda:', err);
   }
 }
 
